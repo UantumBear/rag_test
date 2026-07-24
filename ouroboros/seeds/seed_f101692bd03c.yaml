@@ -1,0 +1,219 @@
+goal: Python 3.12.10, FastAPI, OpenAI API, OpenSearch를 사용해 PDF 업로드·비동기 적재·벡터 검색·근거
+  기반 답변·SSE 채팅 화면까지 동작하는 초보자용 RAG 프로젝트를 구축한다.
+task_type: code
+brownfield_context:
+  project_type: greenfield
+  context_references: []
+  existing_patterns: []
+  existing_dependencies: []
+constraints:
+- 프로젝트 루트 폴더명은 rag_test
+- Python 3.12.10 기준
+- uv와 pyproject.toml 및 uv.lock으로 의존성을 관리하고 requirements.txt는 생성하지 않음
+- Docker Compose로 인증 없는 단일 노드 OpenSearch를 localhost:9200에서 실행하고 OpenSearch Dashboards는
+  제외
+- OpenAI API 키는 .env의 OPENAI_API_KEY로만 제공하고 .env는 Git에서 제외
+- 기본 임베딩 모델은 text-embedding-3-small이며 OPENAI_EMBEDDING_MODEL로 변경 가능
+- 기본 답변 모델은 gpt-4.1-mini이며 OPENAI_CHAT_MODEL로 변경 가능
+- Ragger 적재 파이프라인은 utils/ragger.py에 구현
+- Ragger는 TextParser, Filter, TextSplitter, KeywordExtractor, Embedder, ChunkBuilder,
+  OpenSearch 연동 구성요소와 Hasher를 인스턴스 변수로 보유
+- 기본 검색은 벡터 유사도 기반 top-k 3
+- 관련성 임계값은 코드 상수 0.70
+- 비동기 적재 작업 상태는 서버 메모리에 저장하며 재시작 시 이력 보존 불필요
+- POST /ingest는 PDF 업로드 직후 job_id를 반환하고 적재는 백그라운드 실행
+- 동일 파일명·동일 SHA-256 문서는 기존 파일과 청크를 교체 후 재적재
+- 동일 파일명·다른 SHA-256 문서는 확장자를 유지한 _1, _2 접미사 이름으로 별도 저장
+- KeywordExtractor 기본값은 active=False 및 algorithm="scikit"
+- 비활성 키워드 추출기는 관련 의존성을 초기화하지 않고 keywords 필드를 적재하지 않음
+- 활성화 시 algorithm은 scikit 또는 okt를 지원하고 오류는 파일 경고로 기록하되 전체 적재를 계속함
+- API 인증과 미들웨어는 불필요
+- 타입 힌트와 초보자용 README 실행 절차 필수
+- top_score는 API 응답과 화면에서 제외하고 서버 로그에만 기록
+acceptance_criteria:
+- description: 사용자가 /upload 화면에서 PDF 2~3개를 업로드하면 POST /ingest가 job_id를 즉시 반환하고 백그라운드에서
+    PDF 추출부터 OpenSearch 적재까지 수행한다
+  semantic_ac_key: ac_af65a425571dc54f
+  verify_command: uv run python -m pytest -q tests/test_ingest_api.py && echo OK
+  expected_artifacts:
+  - app
+  - utils/ragger.py
+  - tests/test_ingest_api.py
+  output_assertion: OK
+- description: 사용자가 GET /ingest/{job_id}로 queued, processing, completed, partial_success,
+    failed 상태와 진행률, 파일별 상태·청크 수·경고·오류, 전체 청크 수 및 생성·완료 시각을 조회할 수 있고 알 수 없는 job_id는
+    HTTP 404를 받는다
+  semantic_ac_key: ac_9c8495b30b85ee82
+  verify_command: uv run python -m pytest -q tests/test_ingest_jobs.py && echo OK
+  expected_artifacts:
+  - app
+  - tests/test_ingest_jobs.py
+  output_assertion: OK
+- description: 동일 파일명·동일 내용의 PDF는 SHA-256 식별자를 기준으로 기존 파일과 OpenSearch 청크를 교체하여 중복
+    없이 재적재되고, 동일 파일명·다른 내용은 _1, _2 형식의 별도 저장명으로 보존된다
+  semantic_ac_key: ac_b65745c38ac19ce9
+  verify_command: uv run python -m pytest -q tests/test_document_versioning.py &&
+    echo OK
+  expected_artifacts:
+  - utils/ragger.py
+  - tests/test_document_versioning.py
+  output_assertion: OK
+- description: POST /chat이 질문을 검증하고 벡터 유사도 상위 3개 청크로 답변을 생성하며 answer와 원본 파일명·저장 파일명·페이지·본문
+    일부·유사도 점수를 포함한 sources를 반환하고 top_score는 응답에서 제외한다
+  semantic_ac_key: ac_60a37a11b6efae27
+  verify_command: uv run python -m pytest -q tests/test_chat_api.py && echo OK
+  expected_artifacts:
+  - app
+  - tests/test_chat_api.py
+  output_assertion: OK
+- description: 최고 유사도가 코드 상수 0.70보다 낮으면 사용자는 “문서에서 답을 찾지 못했습니다.”라는 답변을 받고 점수는 서버 로그에만
+    기록된다
+  semantic_ac_key: ac_6b70cf4f2558c0ce
+  verify_command: uv run python -m pytest -q tests/test_similarity_threshold.py &&
+    echo OK
+  expected_artifacts:
+  - app
+  - tests/test_similarity_threshold.py
+  output_assertion: OK
+- description: '사용자가 / 채팅 화면에서 /chat/stream SSE를 통해 답변을 실시간으로 확인하고 완료 시 근거 문서 정보와
+    하단의 “문서 출처: 파일명” 표시를 볼 수 있다'
+  semantic_ac_key: ac_97c1a5f0f60b2486
+  verify_command: uv run python -m pytest -q tests/test_chat_stream_and_pages.py &&
+    echo OK
+  expected_artifacts:
+  - app
+  - templates
+  - static
+  - tests/test_chat_stream_and_pages.py
+  output_assertion: OK
+- description: 개발자가 KeywordExtractor를 비활성화하면 의존성 오류 없이 keywords 필드가 생략되고, scikit 또는
+    okt로 활성화했을 때 발생한 초기화·추출 오류는 파일별 경고로 반환되면서 나머지 적재는 계속된다
+  semantic_ac_key: ac_514614bad731874b
+  verify_command: uv run python -m pytest -q tests/test_keyword_extractor.py && echo
+    OK
+  expected_artifacts:
+  - utils
+  - tests/test_keyword_extractor.py
+  output_assertion: OK
+ontology_schema:
+  name: RAGDocumentWorkflow
+  description: 업로드된 PDF의 식별·버전 저장, 비동기 전처리 작업, OpenSearch 청크, 벡터 검색 결과와 근거 기반 채팅 응답을
+    표현하는 도메인 모델
+  fields:
+  - name: job_id
+    type: string
+    description: 비동기 적재 작업 식별자
+    required: true
+  - name: status
+    type: string
+    description: queued processing completed partial_success failed 중 하나인 작업 상태
+    required: true
+  - name: progress
+    type: number
+    description: 작업 진행률
+    required: true
+  - name: files
+    type: array
+    description: 파일별 저장명 상태 청크 수 경고 오류 결과
+    required: true
+  - name: total_chunks
+    type: number
+    description: 작업에서 적재된 전체 청크 수
+    required: true
+  - name: created_at
+    type: string
+    description: 작업 생성 시각
+    required: true
+  - name: finished_at
+    type: string
+    description: 작업 완료 시각
+    required: true
+  - name: original_filename
+    type: string
+    description: 사용자가 업로드한 원본 파일명
+    required: true
+  - name: stored_filename
+    type: string
+    description: 충돌 정책 적용 후 실제 저장 파일명
+    required: true
+  - name: document_hash
+    type: string
+    description: PDF 원본 바이트의 SHA-256 해시
+    required: true
+  - name: page
+    type: number
+    description: 근거 청크의 PDF 페이지
+    required: true
+  - name: text
+    type: string
+    description: 추출 또는 청킹된 본문
+    required: true
+  - name: embedding
+    type: array
+    description: OpenAI 임베딩 벡터
+    required: true
+  - name: keywords
+    type: array
+    description: 활성화된 키워드 추출기가 생성한 선택적 키워드
+    required: true
+  - name: warnings
+    type: array
+    description: 적재를 중단하지 않는 파일별 경고
+    required: true
+  - name: error
+    type: string
+    description: 파일 또는 작업 실패 오류
+    required: true
+  - name: question
+    type: string
+    description: 사용자의 채팅 질문
+    required: true
+  - name: answer
+    type: string
+    description: 문서 근거로 생성된 답변
+    required: true
+  - name: sources
+    type: array
+    description: 원본 파일명 저장 파일명 페이지 본문 일부 유사도 점수를 담은 근거 목록
+    required: true
+  - name: similarity_score
+    type: number
+    description: 검색 청크의 벡터 유사도 점수
+    required: true
+evaluation_principles:
+- name: EndToEndFunctionality
+  description: PDF 업로드부터 OpenSearch 적재 검색 답변 생성까지 전체 흐름이 실제로 동작하는가
+  weight: 0.35
+- name: UserExperience
+  description: 업로드와 스트리밍 채팅 화면이 초보자도 이해하고 사용할 수 있는가
+  weight: 0.2
+- name: DataCorrectness
+  description: 해시 기반 문서 교체 및 버전 저장이 중복 없이 정확한가
+  weight: 0.2
+- name: Resilience
+  description: 키워드 추출 실패와 파일별 오류가 전체 작업을 불필요하게 중단하지 않는가
+  weight: 0.15
+- name: Maintainability
+  description: 클래스 책임 타입 힌트 설정 및 README가 명확한가
+  weight: 0.1
+exit_conditions:
+- name: FunctionalCompletion
+  description: 핵심 사용자 흐름과 오류 흐름이 구현되고 자동 검증됨
+  criteria: 모든 acceptance criteria 검증 명령 성공
+- name: EnvironmentReady
+  description: 권장 환경에서 설치와 서비스 실행 절차가 재현 가능함
+  criteria: uv sync와 docker compose up -d 및 uv run uvicorn 실행 절차가 README에 문서화됨
+- name: SafetyComplete
+  description: 비밀정보와 낮은 관련성 응답 정책이 준수됨
+  criteria: .env가 Git에서 제외되고 API 응답에 top_score가 노출되지 않으며 임계값 미만 답변이 고정 문구를 반환함
+metadata:
+  seed_id: seed_f101692bd03c
+  version: 1.0.0
+  created_at: '2026-07-24T00:35:53.676367Z'
+  ambiguity_score: 0.048
+  interview_id: interview_20260723_234230
+  parent_seed_id: null
+  generation_mode: normal
+  degraded: false
+  unresolved_slots: []
+  recovery_reason: null
