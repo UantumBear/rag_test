@@ -4,11 +4,18 @@ ouroboros run --help
 which ouroboros
 
 # 2. 코드 생성 없이 시드 검사하기
-ouroboros run workflow --dry-run ouroboros/seeds/seed_f101692bd03c.yaml
+ouroboros run workflow --runtime codex --project-dir . --debug ouroboros/seeds/seed_f101692bd03c.yaml
+
 ## --dry-run은 파일을 수정하지 않고 명세를 읽을 수 있는지만 확인하는 옵션
 
+>> 결과:
+
+ouroboros run workflow --dry-run ouroboros/seeds/seed_f101692bd03c.yaml 를 수행하면, 아래에 cli_path, cwd 등 실행 관련 설정이 노출되는데, dir 지정 없이 실행 시 
+cwd=/Users/a454676/.ouroboros/worktrees/rag_test/orch_612decbbe465/ouroboros/seeds 
+위 경로로 잡혀서, 경로를 지정해야 한다.
 
 # 3. 
+
 ```
 
 
