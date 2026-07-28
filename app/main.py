@@ -2,9 +2,11 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response, status
 
+from app.api.chat import router as chat_router
 from app.common.logger import get_logger
 
 app = FastAPI()
+app.include_router(chat_router)
 logger = get_logger(__name__)
 
 
