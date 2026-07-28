@@ -17,6 +17,9 @@ CHANGE_PATH="agent/project_spec/change_request.md"
 # 성공한 변경 요청을 보관하는 디렉터리입니다.
 HISTORY_DIR="agent/project_spec/history"
 
+# Codex 실행 로그를 보관하는 디렉터리입니다.
+LOG_DIR="agent/logs"
+
 # 필요한 명령어가 설치되어 있는지 확인합니다.
 if ! command -v git >/dev/null 2>&1; then
   echo "git 명령어를 찾을 수 없습니다."
@@ -83,6 +86,21 @@ trap 'rm -f "$REQUEST_SNAPSHOT"' EXIT
 
 cp "$CHANGE_PATH" "$REQUEST_SNAPSHOT"
 
+# 스크립트가 실패하거나 중간에 종료되면
+# change_request.md를 실행 전 내용으로 복원합니다.
+RESTORE_CHANGE_REQUEST=1
+
+cleanup() {
+  if [ "$RESTORE_CHANGE_REQUEST" -eq 1 ] &&
+     [ -f "$REQUEST_SNAPSHOT" ]; then
+    cp "$REQUEST_SNAPSHOT" "$CHANGE_PATH"
+  fi
+
+  rm -f "$REQUEST_SNAPSHOT"
+}
+
+trap cleanup EXIT
+
 # change_request.md 안에 아래와 같은 줄이 있으면:
 #
 # slug: common-logger
@@ -114,13 +132,13 @@ SLUG="${SLUG:-change-request}"
 # 20260729-002-document-delete.md
 #
 # 위 파일들이 있다면 다음 번호는 003이 됩니다.
+# 아래 명령어는 Mac 환경에 맞춤.
 LAST_SEQUENCE="$(
-  find "$HISTORY_DIR" \
-    -maxdepth 1 \
-    -type f \
-    -name '????????-???-*.md' \
-    -print |
-    sed -E 's#^.*/[0-9]{8}-([0-9]{3})-.*\.md$#\1#' |
+  for history_file in "$HISTORY_DIR"/????????-???-*.md; do
+    [ -f "$history_file" ] || continue
+    basename "$history_file"
+  done |
+    sed -E 's/^[0-9]{8}-([0-9]{3})-.*\.md$/\1/' |
     sort -n |
     tail -n 1
 )"
@@ -132,8 +150,15 @@ NEXT_SEQUENCE="$(
 )"
 
 RUN_DATE="$(date '+%Y%m%d')"
+RUN_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 
 ARCHIVE_PATH="$HISTORY_DIR/${RUN_DATE}-${NEXT_SEQUENCE}-${SLUG}.md"
+
+# 로그 디렉터리가 없으면 생성합니다.
+mkdir -p "$LOG_DIR"
+
+# 실패한 실행도 덮어쓰지 않도록 시각을 파일명에 포함합니다.
+LOG_PATH="$LOG_DIR/${RUN_TIMESTAMP}-${NEXT_SEQUENCE}-${SLUG}.log"
 
 echo "변경 요청 파일:"
 echo "$CHANGE_PATH"
@@ -141,6 +166,9 @@ echo
 echo "작업 성공 후 보관 위치:"
 echo "$ARCHIVE_PATH"
 echo
+echo "Codex 실행 로그 위치:"
+echo "$LOG_PATH"
+echo 
 echo "Codex 개발 에이전트를 실행합니다."
 echo
 
@@ -195,15 +223,15 @@ echo
 
 - 기존 테스트를 삭제하거나 무력화하지 마라.
 - 테스트가 실패한 상태에서는 구현 완료라고 판단하지 마라.
-- project_spec/change_request.md를 수정하지 마라.
-- project_spec/history 디렉터리를 수정하지 마라.
-- 이번 요구사항과 관련 없는 파일을 수정하지 마라.
+- agent/project_spec/change_request.md를 수정하지 마라.
+- agent/project_spec/history 디렉터리를 수정하지 마라.
+- agent/logs 디렉터리를 수정하지 마라.
 PROMPT
 
 # 위에서 조립한 전체 내용을 Codex의 표준 입력으로 전달합니다.
 } | codex exec \
   --sandbox workspace-write \
-  -
+  - 2>&1 | tee "$LOG_PATH"
 
 echo
 echo "Codex 작업 후 전체 회귀 테스트를 다시 실행합니다."
@@ -231,6 +259,10 @@ cp "$REQUEST_SNAPSHOT" "$ARCHIVE_PATH"
 # 다음 요구사항을 작성할 수 있도록
 # 현재 change_request.md를 빈 파일로 만듭니다.
 : > "$CHANGE_PATH"
+
+# 정상적으로 작업을 완료했으므로
+# 종료 시 원래 요청 내용으로 복원하지 않습니다.
+RESTORE_CHANGE_REQUEST=0
 
 echo
 echo "작업과 전체 테스트가 성공했습니다."
