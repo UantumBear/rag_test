@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response, status
 
-from app.logging_config import get_logger
+from app.common.logger import get_logger
 
 app = FastAPI()
 logger = get_logger(__name__)

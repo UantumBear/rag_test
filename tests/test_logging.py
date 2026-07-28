@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.logging_config import HANDLER_NAME, LOG_FORMAT, LOG_LEVEL, get_logger
+from app.common.logger import HANDLER_NAME, LOG_FORMAT, LOG_LEVEL, get_logger
 from app.main import log_unhandled_exceptions
 
 
