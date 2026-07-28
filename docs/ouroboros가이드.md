@@ -176,3 +176,6 @@ Ouroboros에서 말하는 Interview는 단순히 AI에게 작업을 부탁하는
 기존 세션을 이어가는게 아니라, 새 세션을 생성해서 새로운 seed 에 작업하도록 함..
 
 ``` 
+
+
+uv tool install --force --with litellm 'ouroboros-ai[mcp]'
